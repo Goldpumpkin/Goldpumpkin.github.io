@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    SpringBoot-Oauth2.0（三） —— Token 的存储方案 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-SpringBoot-oauth (三)- Token 的存储方案" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      SpringBoot-Oauth2.0（三） —— Token 的存储方案
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/09/01/SpringBoot-oauth%20(%E4%B8%89)-%20Token%20%E7%9A%84%E5%AD%98%E5%82%A8%E6%96%B9%E6%A1%88/" class="article-date">
+  <time datetime="2020-09-01T15:34:50.693Z" itemprop="datePublished">2020-09-01</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p>上一篇，我们把 Token 放到了关系型数据库当中存储，如果你的系统对认证接口响应时间要求很高，那么在关系型数据库中，查询 Token，一定会是一个瓶颈。那么怎么办呢？如果仅从存储 Token 方面考虑，有什么可以替代关系型数据的存储呢？</p>
+<a id="more"></a>
+
+<h2 id="Token-存储的分析"><a href="#Token-存储的分析" class="headerlink" title="Token 存储的分析"></a>Token 存储的分析</h2><p>第一，一般关系型数据库中的数据会存放于磁盘当中的，时间主要消耗于 IO 操作。那我们把 Token 放到内存中就可以解决 IO 问题，顺便也减少了对数据库的网络请求，而在 SpringBoot Oauth 框架中默认就是存储就是在内存当中的。</p>
+<p>第二，第一种方案是有缺陷的，现在大多是应用都是分布式架构，把 Token 存放于一台实例的内存，是非常不合理的。这时候需要一个性能很高的中间介质来替代关系型数据库，<a target="_blank" rel="noopener" href="https://redis.io/topics/introduction">Redis</a> 就是一个很好的选择。一方面是因为 Redis 是基于内存操作的，性能非常出色；另一方面，Redis 可以设置过期时间， 正好符合 Token 定时过期的特性。</p>
+<p>第三，还有没有其他方案呢？我们从另一个角度想想，我们为什么要存储 Token 呢？ 因为 Token 是系统发放的，是允许客户端访问系统的一种授权凭证，当客户端携带 Token 请求资源的时候，系统是需要验证 Token 是合法授权的，才允许客户端可以访问相关资源。那么我们是不是也可以这样理解，只要系统能够验证授权的 Token ，不存起来也是可以的。其实有一种 Token 可以做到不存储， token 本身就带有授权信息，系统只需要在内存中用对应的算法就可以验证 Token 是不是合法授权的 ，这种方式就是用 <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/JSON_Web_Token">JWT</a> 。</p>
+<blockquote>
+<p><strong>JWT是什么？</strong></p>
+<p>JSON Web Token(JWT)，是一种认证解决方案，客户端和服务器用 JWT 规定格式的 Token 进行身份认证交互。JWT 的格式分为三段，每段之间用「.」做间隔，并且每段包含了不同的信息，当然作用也不同。分别是：</p>
+<p><strong>Header - 头部</strong><br>    数据格式：JSON 数据经过 Base64URL 编码<br>    信息：指定了加密类型及 Type 为 JWT</p>
+<p><strong>Payload - 负载</strong><br>    数据格式：JSON 数据经过 Base64URL 编码<br>    信息：Client 的授权信息等</p>
+<p><strong>Signature - 签名</strong><br>    说明：前两部分和约定好的秘钥经过指定加密算法生成，也叫<a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/%E8%A8%8A%E6%81%AF%E9%91%91%E5%88%A5%E7%A2%BC">信息验证码 MAC </a>，防止数据篡改    </p>
+</blockquote>
+<p>以上我们提出了3种方案，来替代数据库存储 Token 。其中，第一种在第一篇文章中已经实践过了。那接下来，我们分别实践一下另外两种方案。</p>
+<h2 id="Token-存储到-Redis"><a href="#Token-存储到-Redis" class="headerlink" title="Token 存储到 Redis"></a>Token 存储到 Redis</h2><h3 id="Pom"><a href="#Pom" class="headerlink" title="Pom"></a>Pom</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-data-redis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">redis:</span></span><br><span class="line">    <span class="attr">host:</span> &#123;<span class="string">redis</span> <span class="string">host</span>&#125;</span><br><span class="line">    <span class="attr">password:</span> &#123;<span class="string">redis</span> <span class="string">password</span>&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="请求-Token"><a href="#请求-Token" class="headerlink" title="请求 Token"></a>请求 Token</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200903180205938.png" alt="redis-请求token"></p>
+<h3 id="Redis-中的-Token-数据"><a href="#Redis-中的-Token-数据" class="headerlink" title="Redis 中的 Token 数据"></a>Redis 中的 Token 数据</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200903180425965.png" alt="redis-存储token"></p>
+<p>可以看出数据库新增了4个 Key ，那他们的 Value 是什么呢？直接看数据，都是二进制数据，看不出来。那我们回到源码去找答案。找到类 OAuth2Authentication 的 storeAccessToken 方法，可以看出除了 Key 为 auth:token 的 Value 是OAuth2Authentication 实例的序列化二进制数据外，其他 Key 的 Value 都是 Token 对应的二进制数据。</p>
+<p>那现在 Token 已经存到了我们预期的 Redis 当中了，最后再请求下资源，看是否可以通过，完整的验证下。</p>
+<h3 id="请求资源"><a href="#请求资源" class="headerlink" title="请求资源"></a>请求资源</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200903182015962.png" alt="redis-请求资源"></p>
+<p>毫不意外和惊喜的接受预期的结果吧。</p>
+<p>现在我们已经实现了把 Token 存储到 Redis 当中，其实和存储到数据库中的做法很像，更换 TokenStore 就好了。那我们继续实践下 JWT 方案吧。</p>
+<h2 id="JWT"><a href="#JWT" class="headerlink" title="JWT"></a>JWT</h2><h3 id="Pom-1"><a href="#Pom-1" class="headerlink" title="Pom"></a>Pom</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.security<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-security-jwt<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="配置-1"><a href="#配置-1" class="headerlink" title="配置"></a>配置</h3><p>上面已经简单介绍过 JWT ，其中和配置相关我们要注意的是，我们需要约定一个秘钥并且指定 JWT 对应的算法。JWT 默认的算法是 HMACSHA256 ，在框架找到对应的验证器 <code>MacSigner</code> </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* 配置jwt相关</span></span><br><span class="line"><span class="comment">* 省略了一部分代码</span></span><br><span class="line"><span class="comment">**/</span></span><br><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@EnableAuthorizationServer</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MyAuthorizationServerConfigurer</span> <span class="keyword">extends</span> <span class="title">AuthorizationServerConfigurerAdapter</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">		<span class="comment">// 指定加密秘钥</span></span><br><span class="line">    <span class="meta">@Value(&quot;$&#123;jwt.key:GoLdJwtKey&#125;&quot;)</span></span><br><span class="line">    <span class="keyword">private</span> String tokenSecretKey;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(AuthorizationServerEndpointsConfigurer endpoints)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">				<span class="comment">// 指定 token 转化器</span></span><br><span class="line">        JwtAccessTokenConverter jwtAccessTokenConverter = <span class="keyword">new</span> JwtAccessTokenConverter();</span><br><span class="line">      	<span class="comment">// 设置加签秘钥</span></span><br><span class="line">        jwtAccessTokenConverter.setSigningKey(tokenSecretKey);</span><br><span class="line">      	<span class="comment">// 设置信息验证码校验器</span></span><br><span class="line">        jwtAccessTokenConverter.setVerifier(<span class="keyword">new</span> MacSigner(tokenSecretKey));</span><br><span class="line">        TokenStore tokenStore = <span class="keyword">new</span> JwtTokenStore(jwtAccessTokenConverter);</span><br><span class="line"></span><br><span class="line">        endpoints.accessTokenConverter(jwtAccessTokenConverter);</span><br><span class="line">        endpoints.tokenStore(tokenStore);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="获取-Token"><a href="#获取-Token" class="headerlink" title="获取 Token"></a>获取 Token</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200904114623764.png" alt="jwt-获取token"></p>
+<p>这个 Token 也太长了吧，完整 Token 如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsicmVzIl0sInNjb3BlIjpbIndyaXRlIl0sImV4cCI6MTU5OTIzNDM1OSwianRpIjoiYjQ2NmVkNDEtNWI1Ni00NDc2LWE4ZjctYjEwYjQ0MTFhNTViIiwiY2xpZW50X2lkIjoiZ29sZCJ9.P-510ioyW4mfjS_UFlCREqnCail2GfMHFx4Mc2Jjf4Q</span><br></pre></td></tr></table></figure>
+
+<p>来一起看下这个 Token，确实有三段，前两段可以直接用 Base64URL 解码。那我们直接到 <a target="_blank" rel="noopener" href="https://jwt.io/">JWT 官网</a>解码一下：</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200904115142148.png" alt="jwt-decode"></p>
+<p>信息如图所示，看到了客户端的相关信息，这也是我们想要的 Token 本身已经承载了 Client 的相关授权信息。接下来继续完成我们的验证，请求一下资源看结果。</p>
+<h3 id="请求资源-1"><a href="#请求资源-1" class="headerlink" title="请求资源"></a>请求资源</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200904115634873.png" alt="jwt-请求资源"></p>
+<p>很顺利，我们请求资源成功了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>今天我们的目的就是寻找替代数据库存储 Token 的方案，分析之后找出了3种方案，并分别进行了实践。如果你的应用是单机，那么 Token 直接用内存就可以，很方便。如果你的应用是分布式的，那么关系型数据库是一种选择，如果对性能要求很高，那就上 Redis 吧。不过 JWT 方案性能也很高，还不要存储，只是暴露了一些授权信息，你可以把 Token 生效时间控制一下，因为它颁发后就无法在服务器侧失效，生产用它也没有太大问题。具体情况具体分析后，再选择合适的方式存储 Token 吧。</p>
+<p><strong>个人水平有限，欢迎大家指正，欢迎关注微信公众号「小黄的笔记」一起交流哦<del>~</del></strong><br><img src="http://qiniu.5ires.top/uPic/1598968637527.jpg" alt="小黄的笔记"></p>
+<p><strong>demo：<a target="_blank" rel="noopener" href="https://github.com/goldpumpkin/learn-demo/tree/master/springboot-oauth">https://github.com/goldpumpkin/learn-demo/tree/master/springboot-oauth</a></strong> </p>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/09/01/SpringBoot-oauth%20(%E4%B8%89)-%20Token%20%E7%9A%84%E5%AD%98%E5%82%A8%E6%96%B9%E6%A1%88/" data-id="ckfp8s2fc0002i3gx2kgd6xpi" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/09/25/%E3%80%90%E8%AF%91%E3%80%91%E6%80%8E%E4%B9%88%E5%86%99%E5%A5%BD%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95%E5%8F%8A%E5%85%B6%E9%87%8D%E8%A6%81%E6%80%A7/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            怎么写可测试代码？为什么写可测试代码是重要的呢？
+          
+        </div>
+      </a>
+    
+    
+      <a href="/2020/08/31/SpringBoot-Oauth2.0%EF%BC%88%E4%BA%8C%EF%BC%89-%20client%20%E5%8F%8A%20token%20%E5%AD%98%E6%94%BE%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-nav-link">
+        <strong class="article-nav-caption">后一篇</strong>
+        <div class="article-nav-title">SpringBoot-Oauth2.0（二）—— client 及 token 存放到数据库</div>
+      </a>
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    Zuul 的源码分析 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-Zuul源码分析" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      Zuul 的源码分析
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/07/21/Zuul%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="article-date">
+  <time datetime="2020-07-20T16:34:26.621Z" itemprop="datePublished">2020-07-21</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p>Zuul 的源码读过吗？让我们一起看看吧</p>
+<a id="more"></a>
+
+<h2 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h2><p>明确Zuul的执行流程和重要类的分析</p>
+<h2 id="Zuul过滤器的生命周期"><a href="#Zuul过滤器的生命周期" class="headerlink" title="Zuul过滤器的生命周期"></a>Zuul过滤器的生命周期</h2><p><img src="http://qiniu.5ires.top/uPic/view.png" alt="preview"></p>
+<h2 id="源码分析"><a href="#源码分析" class="headerlink" title="源码分析"></a>源码分析</h2><h3 id="zuul怎么拦截我们的请求？"><a href="#zuul怎么拦截我们的请求？" class="headerlink" title="zuul怎么拦截我们的请求？"></a>zuul怎么拦截我们的请求？</h3><p><code>ZuulServletFilter</code> - 继承 Filter | <code>ZuulServlet</code> - 继承 HttpServlet<br>可以通过这两个类，让Zuul接管请求。由于他们的逻辑基本一致，下面用<code>ZuulServletFilter</code>来分析</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* Zuul核心处理类，拦截请求</span></span><br><span class="line"><span class="comment">**/</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ZuulServletFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> ZuulRunner zuulRunner;</span><br><span class="line"></span><br><span class="line">		<span class="comment">// 省略...</span></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">doFilter</span><span class="params">(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain)</span> <span class="keyword">throws</span> IOException, ServletException </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">         		<span class="comment">// 初始化requests和responses到RequestContext中，详见ZuulRunner#init</span></span><br><span class="line">            init((HttpServletRequest) servletRequest, (HttpServletResponse) servletResponse);</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">              	<span class="comment">// 执行 filterType=pre 的过滤器</span></span><br><span class="line">                preRouting();</span><br><span class="line">            &#125; <span class="keyword">catch</span> (ZuulException e) &#123;</span><br><span class="line">                <span class="comment">// 执行 filterType=error 的过滤器</span></span><br><span class="line">                error(e);</span><br><span class="line">                postRouting();</span><br><span class="line">                <span class="keyword">return</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="comment">// Only forward onto to the chain if a zuul response is not being sent</span></span><br><span class="line">            <span class="keyword">if</span> (!RequestContext.getCurrentContext().sendZuulResponse()) &#123;</span><br><span class="line">                filterChain.doFilter(servletRequest, servletResponse);</span><br><span class="line">                <span class="keyword">return</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">	              <span class="comment">// 执行 filterType=route 的过滤器</span></span><br><span class="line">                routing();</span><br><span class="line">            &#125; <span class="keyword">catch</span> (ZuulException e) &#123;</span><br><span class="line">                error(e);</span><br><span class="line">                postRouting();</span><br><span class="line">                <span class="keyword">return</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">              	<span class="comment">// 执行 filterType=post 的过滤器</span></span><br><span class="line">                postRouting();</span><br><span class="line">            &#125; <span class="keyword">catch</span> (ZuulException e) &#123;</span><br><span class="line">                error(e);</span><br><span class="line">                <span class="keyword">return</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Throwable e) &#123;</span><br><span class="line">            error(<span class="keyword">new</span> ZuulException(e, <span class="number">500</span>, <span class="string">&quot;UNCAUGHT_EXCEPTION_FROM_FILTER_&quot;</span> + e.getClass().getName()));</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">          	<span class="comment">// 清空线程变量</span></span><br><span class="line">            RequestContext.getCurrentContext().unset();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以上方法核心步骤：</p>
+<ul>
+<li><p>初始化请求上下文<code>RequestContext</code></p>
+</li>
+<li><p>执行 pre、route、post过滤器，如果有错，执行error过滤器</p>
+</li>
+</ul>
+<p><code>ZuulRunner</code> - 初始化<code>RequestContext</code>中的requests和responses并转发Filter相关方法到<code>FilterProcessor</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ZuulRunner</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">boolean</span> bufferRequests;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 省略...</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 初始化RequestContext：生成请求和响应wapper保存</span></span><br><span class="line"><span class="comment">     * RequestContext：继承了ConcurrentHashMap，是一个Map容器，主要存放请求、响应供ZuulFilters使用。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">init</span><span class="params">(HttpServletRequest servletRequest, HttpServletResponse servletResponse)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        RequestContext ctx = RequestContext.getCurrentContext();</span><br><span class="line">        <span class="keyword">if</span> (bufferRequests) &#123;</span><br><span class="line">            ctx.setRequest(<span class="keyword">new</span> HttpServletRequestWrapper(servletRequest));</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            ctx.setRequest(servletRequest);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        ctx.setResponse(<span class="keyword">new</span> HttpServletResponseWrapper(servletResponse));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * executes &quot;post&quot; filterType  ZuulFilters</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@throws</span> ZuulException</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">postRoute</span><span class="params">()</span> <span class="keyword">throws</span> ZuulException </span>&#123;</span><br><span class="line">        FilterProcessor.getInstance().postRoute();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">   <span class="comment">// 省略route() preRoute() error() 方法</span></span><br><span class="line">&#125;	</span><br></pre></td></tr></table></figure>
+
+<p>以上看出Zuul是通过<code>ZuulServletFilter</code>以filter的方式（或者以<code>ZuulServlet</code>以servlet的方式）拦截或者承接我们的请求，并在<code>doFilter</code>方法（<code>service</code>方法）中处理各种类型的ZuulFilters，并通过<code>ZuulRunner</code>转发到<code>FilterProcessor</code>中找到对应的filter并执行相关逻辑。整个大致流程比较简单清晰，类似于设计模式中的门面模式。</p>
+<p>​    其中，<code>RequestContext</code>是存在<code>ThreadLocal</code>当中，可以注意到当Zuul处理完毕之后，会清空线程变量<code>RequestContext</code>,以防止内存泄露。</p>
+<h3 id="FilterProcessor怎么找到相应ZuulFilters并执行呢？"><a href="#FilterProcessor怎么找到相应ZuulFilters并执行呢？" class="headerlink" title="FilterProcessor怎么找到相应ZuulFilters并执行呢？"></a><code>FilterProcessor</code>怎么找到相应ZuulFilters并执行呢？</h3><p><code>FilterProcessor</code> - 执行filters的核心类</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* 执行对应阶段ZuulFilters</span></span><br><span class="line"><span class="comment">* sType：即为filterType，例如&quot;post&quot;、&quot;pre&quot;、&quot;route&quot;、&quot;error&quot;</span></span><br><span class="line"><span class="comment">* </span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">runFilters</span><span class="params">(String sType)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (RequestContext.getCurrentContext().debugRouting()) &#123;</span><br><span class="line">            Debug.addRoutingDebug(<span class="string">&quot;Invoking &#123;&quot;</span> + sType + <span class="string">&quot;&#125; type filters&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">boolean</span> bResult = <span class="keyword">false</span>;</span><br><span class="line">			  <span class="comment">// 获取已经注册了的ZuulFilters，根本是从FilterRegistry中获取。并且list是已经排好序的，</span></span><br><span class="line">  			<span class="comment">// 根据给定的filterOrder</span></span><br><span class="line">        List&lt;ZuulFilter&gt; list = FilterLoader.getInstance().getFiltersByType(sType);</span><br><span class="line">        <span class="keyword">if</span> (list != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; list.size(); i++) &#123;</span><br><span class="line">                ZuulFilter zuulFilter = list.get(i);</span><br><span class="line">                <span class="comment">// 执行ZuulFilter逻辑并</span></span><br><span class="line">                Object result = processZuulFilter(zuulFilter);</span><br><span class="line">                <span class="keyword">if</span> (result != <span class="keyword">null</span> &amp;&amp; result <span class="keyword">instanceof</span> Boolean) &#123;</span><br><span class="line">                    bResult |= ((Boolean) result);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> bResult;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* 执行ZuulFilter，并把执行情况组合成ZuulFilterResult并返回</span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">processZuulFilter</span><span class="params">(ZuulFilter filter)</span> <span class="keyword">throws</span> ZuulException </span>&#123;</span><br><span class="line">  <span class="comment">// 省略部分代码...</span></span><br><span class="line">  <span class="comment">// 具体执行在 ZuulFilter#runFilter</span></span><br><span class="line">  ZuulFilterResult result = filter.runFilter();</span><br><span class="line">  ExecutionStatus s = result.getStatus();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">switch</span> (s) &#123;</span><br><span class="line">    <span class="keyword">case</span> FAILED:</span><br><span class="line">      t = result.getException();</span><br><span class="line">      ctx.addFilterExecutionSummary(filterName, ExecutionStatus.FAILED.name(), execTime);</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> SUCCESS:</span><br><span class="line">      o = result.getResult();</span><br><span class="line">      ctx.addFilterExecutionSummary(filterName, ExecutionStatus.SUCCESS.name(), execTime);</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">  &#125;</span><br><span class="line">            </span><br><span class="line">  <span class="keyword">if</span> (t != <span class="keyword">null</span>) <span class="keyword">throw</span> t;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 统计每个filter的每次执行情况</span></span><br><span class="line">  usageNotifier.notify(filter, s);</span><br><span class="line">  <span class="keyword">return</span> o;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>以上方法核心步骤：</p>
+<ul>
+<li><p>按序执行各阶段ZuulFilters</p>
+</li>
+<li><p>记录ZuulFilter执行结果</p>
+</li>
+<li><p>统计执行情况</p>
+</li>
+</ul>
+<p><code>ZuulFilter</code> - 最基本的Filter抽象类，自定义的Filter是继承此Filter，<code>FilterProcessor</code>执行Filter最终会转发到此类的<code>runFilter</code>方法</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> ZuulFilterResult <span class="title">runFilter</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 执行结果以及执行成功与否情况包装成ZuulFilterResult返回</span></span><br><span class="line">  ZuulFilterResult zr = <span class="keyword">new</span> ZuulFilterResult();</span><br><span class="line">  <span class="comment">// 此filter是已被archaius禁用 「archaius是netflix开源的动态属性配置框架」</span></span><br><span class="line">  <span class="keyword">if</span> (!isFilterDisabled()) &#123;</span><br><span class="line">    <span class="comment">// 执行自定filter的shouldFilter方法判断是否执行此filter</span></span><br><span class="line">    <span class="keyword">if</span> (shouldFilter()) &#123;</span><br><span class="line">      Tracer t = TracerFactory.instance().startMicroTracer(<span class="string">&quot;ZUUL::&quot;</span> + <span class="keyword">this</span>.getClass().getSimpleName());</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        Object res = run();</span><br><span class="line">        zr = <span class="keyword">new</span> ZuulFilterResult(res, ExecutionStatus.SUCCESS);</span><br><span class="line">      &#125; <span class="keyword">catch</span> (Throwable e) &#123;</span><br><span class="line">        t.setName(<span class="string">&quot;ZUUL::&quot;</span> + <span class="keyword">this</span>.getClass().getSimpleName() + <span class="string">&quot; failed&quot;</span>);</span><br><span class="line">        zr = <span class="keyword">new</span> ZuulFilterResult(ExecutionStatus.FAILED);</span><br><span class="line">        zr.setException(e);</span><br><span class="line">      &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        t.stopAndLog();</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      zr = <span class="keyword">new</span> ZuulFilterResult(ExecutionStatus.SKIPPED);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> zr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Zuul把ZuulFilters存储在类<code>FilterLoader</code>属性名为<code>hashFiltersByType</code>的<code>ConcurrentHashMap</code>中，key为filterType(eg: pre、route、post、error或者自定义)</p>
+<p>那么问题来了，这些存在于<code>FilterLoader</code>的ZuulFilter是怎么加载进来的呢？</p>
+<h3 id="ZuulFIlter的加载"><a href="#ZuulFIlter的加载" class="headerlink" title="ZuulFIlter的加载"></a>ZuulFIlter的加载</h3><p>通过层层搜索，找到类<code>FilterFileManager</code> ，在此类初始化的时候，会到指定路径下读取指定文件。同时在初始时，会创建守护线程来定时扫描加载文件。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">FilterFileManager</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 省略代码...</span></span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">init</span><span class="params">(<span class="keyword">int</span> pollingIntervalSeconds, String... directories)</span> <span class="keyword">throws</span> Exception, IllegalAccessException, InstantiationException </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (INSTANCE == <span class="keyword">null</span>) INSTANCE = <span class="keyword">new</span> FilterFileManager();</span><br><span class="line">    INSTANCE.aDirectories = directories;</span><br><span class="line">    <span class="comment">// 守护线程的轮询间隔时间</span></span><br><span class="line">    INSTANCE.pollingIntervalSeconds = pollingIntervalSeconds;</span><br><span class="line">    <span class="comment">// 读取并处理文件</span></span><br><span class="line">    INSTANCE.manageFiles();</span><br><span class="line">    <span class="comment">// 开启文件扫描的守护线程</span></span><br><span class="line">    INSTANCE.startPoller();</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="function"><span class="keyword">void</span> <span class="title">manageFiles</span><span class="params">()</span> <span class="keyword">throws</span> Exception, IllegalAccessException, InstantiationException </span>&#123;</span><br><span class="line">        <span class="comment">// 读取文件</span></span><br><span class="line">				List&lt;File&gt; aFiles = getFiles();</span><br><span class="line">    		<span class="comment">// 通过FilterLoader来处理文件</span></span><br><span class="line">        processGroovyFiles(aFiles);</span><br><span class="line">    &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 扫描指定目录下的指定类型文件</span></span><br><span class="line">  <span class="function">List&lt;File&gt; <span class="title">getFiles</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    List&lt;File&gt; list = <span class="keyword">new</span> ArrayList&lt;File&gt;();</span><br><span class="line">    <span class="keyword">for</span> (String sDirectory : aDirectories) &#123;</span><br><span class="line">      <span class="keyword">if</span> (sDirectory != <span class="keyword">null</span>) &#123;</span><br><span class="line">        File directory = getDirectory(sDirectory);</span><br><span class="line">        <span class="comment">// Zuul有自带类`GroovyFileFilter`是扫描 .groovy 文件.</span></span><br><span class="line">        File[] aFiles = directory.listFiles(FILENAME_FILTER);</span><br><span class="line">        <span class="keyword">if</span> (aFiles != <span class="keyword">null</span>) &#123;</span><br><span class="line">          list.addAll(Arrays.asList(aFiles));</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> list;</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 开启守护线程进行轮询</span></span><br><span class="line">  <span class="function"><span class="keyword">void</span> <span class="title">startPoller</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    poller = <span class="keyword">new</span> Thread(<span class="string">&quot;GroovyFilterFileManagerPoller&quot;</span>) &#123;</span><br><span class="line">      <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">while</span> (bRunning) &#123;</span><br><span class="line">          <span class="keyword">try</span> &#123;</span><br><span class="line">            sleep(pollingIntervalSeconds * <span class="number">1000</span>);</span><br><span class="line">            manageFiles();</span><br><span class="line">          &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;;</span><br><span class="line">    poller.setDaemon(<span class="keyword">true</span>);</span><br><span class="line">    poller.start();</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">FilterLoader</span> </span>&#123;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 处理文件</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">putFilter</span><span class="params">(File file)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    String sName = file.getAbsolutePath() + file.getName();</span><br><span class="line">    <span class="comment">// 判断如果文件被修改过，则删除对应已经注册的filter</span></span><br><span class="line">    <span class="keyword">if</span> (filterClassLastModified.get(sName) != <span class="keyword">null</span> &amp;&amp; (file.lastModified() != filterClassLastModified.get(sName))) &#123;</span><br><span class="line">      LOG.debug(<span class="string">&quot;reloading filter &quot;</span> + sName);</span><br><span class="line">      filterRegistry.remove(sName);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    ZuulFilter filter = filterRegistry.get(sName);</span><br><span class="line">    <span class="keyword">if</span> (filter == <span class="keyword">null</span>) &#123;</span><br><span class="line">      <span class="comment">// 编译文件 - zuul自带GroovyCompiler编译groovy编写的文件</span></span><br><span class="line">      Class clazz = COMPILER.compile(file);</span><br><span class="line">      <span class="comment">// 如果不是抽象类即ZuulFilter，则进行实例化并放入内存</span></span><br><span class="line">      <span class="keyword">if</span> (!Modifier.isAbstract(clazz.getModifiers())) &#123;</span><br><span class="line">        filter = (ZuulFilter) FILTER_FACTORY.newInstance(clazz);</span><br><span class="line">        List&lt;ZuulFilter&gt; list = hashFiltersByType.get(filter.filterType());</span><br><span class="line">        <span class="keyword">if</span> (list != <span class="keyword">null</span>) &#123;</span><br><span class="line">          hashFiltersByType.remove(filter.filterType()); <span class="comment">//rebuild this list</span></span><br><span class="line">        &#125;</span><br><span class="line">        filterRegistry.put(file.getAbsolutePath() + file.getName(), filter);</span><br><span class="line">        filterClassLastModified.put(sName, file.lastModified());</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">  &#125;	</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以上两个类核心步骤 即为 <code>FilterFileManager</code>初始化过程</p>
+<ul>
+<li>扫描指定目录下的groovy文件，通过<code>FilterLoader</code>编译文件，并加载ZuulFilter</li>
+<li>开启守护进程，轮询文件，动态加载ZuulFilter</li>
+</ul>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><ul>
+<li><p>Zuul的源码执行路径：</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200724141526966.png" alt="image-20200724141526966"></p>
+</li>
+<li><p>ZuulFilter的加载方式：是通过扫描<code>.groovy</code>文件来加载，并支持动态加载，具体可以看官方示例zuul-simple-webapp</p>
+</li>
+<li><p>Zuul的整个流程，是基于servlet或filter方式在service或doFilter方法中衔接请求，并运用类似<a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/%E5%A4%96%E8%A7%80%E6%A8%A1%E5%BC%8F">门面模式</a>编写</p>
+</li>
+</ul>
+<p>​      至此，Zuulfilter的加载以及各类型Filter的执行都在源码中找到了。zuul-core的代码还是很容易能看懂。下一篇，会分析SpringCloud怎么整合Zuul。</p>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/07/21/Zuul%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" data-id="ckfp8s2fd0003i3gxfr6b663c" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/07/21/SpringCloud%E6%95%B4%E5%90%88Zuul%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            SpringCloud 整合 Zuul 源码分析
+          
+        </div>
+      </a>
+    
+    
+      <a href="/2020/07/14/Hytrix%E7%BA%BF%E7%A8%8B%E6%B1%A0%E8%AE%BE%E7%BD%AE%E5%9D%91/" class="article-nav-link">
+        <strong class="article-nav-caption">后一篇</strong>
+        <div class="article-nav-title">Hytrix线程池设置坑</div>
+      </a>
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>

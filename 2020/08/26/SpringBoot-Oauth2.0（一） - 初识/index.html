@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    SpringBoot-Oauth2.0（一） —— 初识 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-SpringBoot-Oauth2.0（一） - 初识" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      SpringBoot-Oauth2.0（一） —— 初识
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/08/26/SpringBoot-Oauth2.0%EF%BC%88%E4%B8%80%EF%BC%89%20-%20%E5%88%9D%E8%AF%86/" class="article-date">
+  <time datetime="2020-08-26T06:39:21.105Z" itemprop="datePublished">2020-08-26</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p>最近在搞平台 API 的安全和认证的相关东西，接口安全和认证在生产活动中是非常重要的。目前最流行的就是 Oauth2 的认证方式。接下来就用 SpringBoot 的安全依赖简单实践一下，了解一下 Oauth2 的流程。</p>
+<a id="more"></a>
+
+<h2 id="Oauth2的简单认识"><a href="#Oauth2的简单认识" class="headerlink" title="Oauth2的简单认识"></a>Oauth2的简单认识</h2><h3 id="是什么？"><a href="#是什么？" class="headerlink" title="是什么？"></a>是什么？</h3><p>是一种授权机制，用来授权第三方应用，获取用户数据</p>
+<h3 id="授权的四种方式"><a href="#授权的四种方式" class="headerlink" title="授权的四种方式"></a>授权的四种方式</h3><ul>
+<li><p>授权码模式（authorization-code）</p>
+<p>此方式安全性最高，授权码通过前端传送，令牌存储在后端。主要适用于有后端的web应用。</p>
+</li>
+<li><p>隐藏式（implicit）</p>
+<p>此方式无授权码中间步骤，很不安全。主要适用于纯前端应用。</p>
+</li>
+<li><p>密码式（password）</p>
+<p>此方式需要用户高度信任第三方应用，风险比较大。</p>
+</li>
+<li><p>客户端凭证式（client credentials）</p>
+<p>这种方式适用于服务器和服务器之间的应用，是关于接口安全的认证。</p>
+</li>
+</ul>
+<h3 id="客户端凭证认证（client-credentials）"><a href="#客户端凭证认证（client-credentials）" class="headerlink" title="客户端凭证认证（client credentials）"></a>客户端凭证认证（client credentials）</h3><p>这种方式是是我们今天主要实践的认证方式。如果有同学在平时的开放当中，经常和外部第三方对接，应该很熟悉这种认证方式。我们最常见的就是在微信开发当中，到微信公众号官方服务器认证获取 access token，之后我们请求相关微信接口，需要带上此 access token 才有权限访问。</p>
+<h2 id="SpringBoot-Oatuh2-简单实践"><a href="#SpringBoot-Oatuh2-简单实践" class="headerlink" title="SpringBoot Oatuh2 简单实践"></a>SpringBoot Oatuh2 简单实践</h2><p>我们简单认识 Oauth2 之后，接下来，我们就动手快速实现一下。</p>
+<h3 id="大致的思路步骤："><a href="#大致的思路步骤：" class="headerlink" title="大致的思路步骤："></a>大致的思路步骤：</h3><ol>
+<li>相关依赖的引入</li>
+<li>配置 <ul>
+<li>认证服务信息</li>
+<li>资源服务信息</li>
+</ul>
+</li>
+<li>验证<ul>
+<li>获取认证 access token</li>
+<li>访问资源</li>
+</ul>
+</li>
+</ol>
+<h3 id="Pom"><a href="#Pom" class="headerlink" title="Pom"></a>Pom</h3><p>要想开启 Oauth2 认证，我们必须引入 SpringBoot 安全依赖 和 Spring 的 Oauth2 的依赖</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-security<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.security.oauth<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-security-oauth2<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>引入安全认证依赖之后，SpringBoot 会对资源服务器上所有的资源默认进行保护。</p>
+<h3 id="Authorization-Service-Config-认证服务配置"><a href="#Authorization-Service-Config-认证服务配置" class="headerlink" title="Authorization Service Config - 认证服务配置"></a>Authorization Service Config - 认证服务配置</h3><p>认证服务的配置，主要包括以下3个方面：</p>
+<ol>
+<li><p>定义 token endpoint 的安全约束</p>
+<p>主要配置：是否允许客户端以 Form 表单的形式的登录、定义密码的加密方式等</p>
+</li>
+<li><p>定义客户端详细的信息</p>
+<p>客户端的信息包括了：客户端的信息存储方式（内存 or 数据库）以及客户端的认证需要的信息，包括 client_id、client_secret、grant_type、scope</p>
+</li>
+<li><p>定义授权和 token endpoint 以及令牌服务。</p>
+<p>可以配置授权的 endpoint、token 的存储方式等</p>
+</li>
+</ol>
+<p>认证服务配置如下：（本次实践，本着能省掉的就省掉的配置原则）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@EnableAuthorizationServer</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MyAuthorizationServerConfigurer</span> <span class="keyword">extends</span> <span class="title">AuthorizationServerConfigurerAdapter</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 配置安全约束相关配置</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> security 定义令牌终结点上的安全约束</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@throws</span> Exception</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(AuthorizationServerSecurityConfigurer security)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="comment">// 支持client_id、client_secret以form表单的形式登录,参考可见：微信获取access token</span></span><br><span class="line">        security.allowFormAuthenticationForClients();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 配置客户端详细信息</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> clients 定义客户端详细信息服务的配置程序。可以初始化客户端详细信息，也可以只引用现有存储。</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@throws</span> Exception</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(ClientDetailsServiceConfigurer clients)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        clients.inMemory()</span><br><span class="line">            <span class="comment">// client_id</span></span><br><span class="line">            .withClient(<span class="string">&quot;gold&quot;</span>)</span><br><span class="line">            <span class="comment">// 授权方式</span></span><br><span class="line">            .authorizedGrantTypes(<span class="string">&quot;client_credentials&quot;</span>)</span><br><span class="line">            <span class="comment">// 授权范围</span></span><br><span class="line">            .scopes(<span class="string">&quot;write&quot;</span>)</span><br><span class="line">            <span class="comment">// client_secret</span></span><br><span class="line">            .secret(<span class="string">&quot;&#123;noop&#125;123456&quot;</span>);</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> endpoints 定义授权和令牌端点以及令牌服务。</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@throws</span> Exception</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(AuthorizationServerEndpointsConfigurer endpoints)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.configure(endpoints);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><em>注意密码的配置，需要配置加密方式，此实践是没有用任何加密方式的。</em></p>
+<p><em>相关信息见：DelegatingPasswordEncoder or PasswordEncoderFactories</em></p>
+<h3 id="Resource-Service-Config-资源服务的配置"><a href="#Resource-Service-Config-资源服务的配置" class="headerlink" title="Resource Service Config - 资源服务的配置"></a>Resource Service Config - 资源服务的配置</h3><p>资源服务的配置，主要包括以下2个方面：</p>
+<ol>
+<li><p>资源服务的安全配置</p>
+<p>可以配置 资源 ID、stateless - 资源是否仅允许基于令牌的验证、token 的存储方式等</p>
+</li>
+<li><p>Http 安全配置</p>
+<p>我们的被保护的 API，就是在这里配置</p>
+</li>
+</ol>
+<p>资源相关配置：</p>
+<p>API：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@AllArgsConstructor</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ResController</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/res/&#123;id&#125;&quot;)</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">testOauth</span><span class="params">(<span class="meta">@PathVariable</span> String id)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;Get the resource &quot;</span> + id;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<p>资源服务配置：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@EnableResourceServer</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MyResourceServerConfigurer</span> <span class="keyword">extends</span> <span class="title">ResourceServerConfigurerAdapter</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(ResourceServerSecurityConfigurer resources)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.configure(resources);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(HttpSecurity http)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        http.authorizeRequests()</span><br><span class="line">            .antMatchers(<span class="string">&quot;/res/**&quot;</span>).authenticated();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="配置完成小结"><a href="#配置完成小结" class="headerlink" title="配置完成小结"></a>配置完成小结</h3><p>我们已经完成了 SpringBoot 的 Oauth2 的最基本的配置。</p>
+<p>Client 的相关信息：</p>
+<ul>
+<li>client_id : gold</li>
+<li>client_secret : 123456</li>
+<li>scopes : write</li>
+<li>grant_type :  client_credentials</li>
+</ul>
+<p>接下来，我们就来验证一下我们的配置是否生效。</p>
+<p>下面的请求是在 postman 中进行的。 base_url 为设置的全局变量，实际为 <a target="_blank" rel="noopener" href="http://127.0.0.1:8080/">http://127.0.0.1:8080</a></p>
+<h3 id="直接请求"><a href="#直接请求" class="headerlink" title="直接请求"></a>直接请求</h3><p>当我们直接请求，应用返回未授权，无法访问：</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200828171302993.png" alt="image-20200828171302993"></p>
+<h3 id="获取-access-token"><a href="#获取-access-token" class="headerlink" title="获取 access token"></a>获取 access token</h3><p>springboot oauth 默认获取 token 的 endpoint 是: /oauth/token</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200828153448422.png" alt="image-20200828153448422"></p>
+<p>从请求结果可以看到，我们获取了access_token，并且刷新时间是43199秒，即12个小时。</p>
+<h3 id="请求被保护的资源"><a href="#请求被保护的资源" class="headerlink" title="请求被保护的资源"></a>请求被保护的资源</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200828153851996.png" alt="image-20200828153851996"></p>
+<p>结果来看，我们成功用 access token 访问到了被保护的资源。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>本文简单介绍了 Oauth2 是什么及授权方式，想了解更多 Oauth2 知识的同学，可以到<a target="_blank" rel="noopener" href="http://www.ruanyifeng.com/blog/2019/04/oauth_design.html">阮一峰老师博客</a>去学习一下。之后用 SpringBoot 简单实现了客户端凭证式的认证方式，其配置的主要关键点在于理解<strong>资源服务器配置（ResourceServerConfigurer）</strong>和<strong>认证服务器配置（AuthorizationServerConfigurer）</strong>。同学们，动起来，实现一下吧！</p>
+<p><strong>个人水平有限，欢迎大家指正，一起交流哦<del>~</del></strong></p>
+<p><strong>demo：<a target="_blank" rel="noopener" href="https://github.com/goldpumpkin/learn-demo/tree/master/springboot-oauth">https://github.com/goldpumpkin/learn-demo/tree/master/springboot-oauth</a></strong> </p>
+<p><em>Reference:</em></p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://projects.spring.io/spring-security-oauth/docs/oauth2.html">spring-security-oauth</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.ruanyifeng.com/blog/2014/05/oauth_2_0.html">理解OAuth 2.0</a></li>
+</ol>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/08/26/SpringBoot-Oauth2.0%EF%BC%88%E4%B8%80%EF%BC%89%20-%20%E5%88%9D%E8%AF%86/" data-id="ckfp8s2f90000i3gxeotk6k05" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/08/31/SpringBoot-Oauth2.0%EF%BC%88%E4%BA%8C%EF%BC%89-%20client%20%E5%8F%8A%20token%20%E5%AD%98%E6%94%BE%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            SpringBoot-Oauth2.0（二）—— client 及 token 存放到数据库
+          
+        </div>
+      </a>
+    
+    
+      <a href="/2020/08/19/Zuul%E7%9A%84%E8%B7%AF%E7%94%B1%E5%8C%B9%E9%85%8D/" class="article-nav-link">
+        <strong class="article-nav-caption">后一篇</strong>
+        <div class="article-nav-title">Zuul 的路由匹配</div>
+      </a>
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>

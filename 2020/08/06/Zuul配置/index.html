@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    Zuul 的配置 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-Zuul配置" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      Zuul 的配置
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/08/06/Zuul%E9%85%8D%E7%BD%AE/" class="article-date">
+  <time datetime="2020-08-06T09:19:49.884Z" itemprop="datePublished">2020-08-06</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p>这一篇主要介绍Zuul的配置。为了大家快速上手，主要通过示例来演示如何进行Zuul配置。</p>
+<a id="more"></a>
+
+<h2 id="说明"><a href="#说明" class="headerlink" title="说明"></a>说明</h2><p>配置可以分为几个部分：</p>
+<p><a target="_blank" rel="noopener" href="https://docs.spring.io/spring-cloud-netflix/docs/2.2.4.RELEASE/reference/html/#netflix-zuul-starter">Zuul路由配置</a>：</p>
+<ul>
+<li><p>Zuul自己的配置对应的类是<code>ZuulProperties</code>，配置的前缀是<code>zuul</code></p>
+</li>
+<li><p>自定义的路由配置在代码中对应的是<code>ZuulProperties</code>的属性：<code>Map&lt;String, ZuulRoute&gt; routes = new LinkedHashMap&lt;&gt;()</code></p>
+</li>
+<li><p>routes是一个Map，key代表route名称，value是路由规则配置的详细信息</p>
+</li>
+</ul>
+<p><a target="_blank" rel="noopener" href="https://github.com/Netflix/ribbon/wiki/Getting-Started">Ribbon配置信息</a>：主要提供负载均衡、重试、超时等配置。配置类是<a target="_blank" rel="noopener" href="http://netflix.github.io/ribbon/ribbon-core-javadoc/com/netflix/client/config/CommonClientConfigKey.html">CommonClientConfigKey</a>，其中要注意配置key是大小写敏感的！</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/Netflix/Hystrix/wiki/Configuration#coreSize">Hytrix配置信息</a>：主要提供熔断策略、超时等配置</p>
+<h2 id="路由配置分为两种"><a href="#路由配置分为两种" class="headerlink" title="路由配置分为两种"></a>路由配置分为两种</h2><ul>
+<li>转发到物理地址</li>
+<li>转发到服务</li>
+</ul>
+<h2 id="转发到物理路径的配置"><a href="#转发到物理路径的配置" class="headerlink" title="转发到物理路径的配置"></a>转发到物理路径的配置</h2><h3 id="配置说明"><a href="#配置说明" class="headerlink" title="配置说明"></a>配置说明</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">zuul:</span></span><br><span class="line">  <span class="attr">host:</span></span><br><span class="line">  	<span class="comment"># 链接超时时间</span></span><br><span class="line">    <span class="attr">connect-timeout-millis:</span> <span class="number">2000</span></span><br><span class="line">    <span class="comment"># socket超时时间</span></span><br><span class="line">    <span class="attr">socket-timeout-millis:</span> <span class="number">10000</span></span><br><span class="line">  <span class="comment"># routes 即为 Map&lt;String, ZuulRoute&gt; routes = new LinkedHashMap&lt;&gt;()</span></span><br><span class="line">  <span class="attr">routes:</span></span><br><span class="line">    <span class="comment"># route名称 - 是ZuulRoute属性中的id，也是Map中的key</span></span><br><span class="line">    <span class="attr">test:</span></span><br><span class="line">      <span class="comment"># 匹配路径模板</span></span><br><span class="line">      <span class="attr">path:</span> <span class="string">/test/**</span></span><br><span class="line">      <span class="comment"># 请求转发到的服务id 和 url属性互斥，两个只能配置一个</span></span><br><span class="line">      <span class="comment"># 请求转发到的物理路径</span></span><br><span class="line">      <span class="attr">url:</span> <span class="string">http://127.0.0.1:9000</span> </span><br><span class="line">      <span class="comment"># 转发前是否跳过前缀,默认为true，前缀指的是：匹配路径的path前缀 or zuul.prefix定义</span></span><br><span class="line">      <span class="attr">stripPrefix:</span> <span class="literal">true</span></span><br><span class="line">      <span class="comment"># 敏感Header， 转发时会去掉敏感的头部信息，以下是默认的配置。</span></span><br><span class="line">      <span class="attr">sensitiveHeaders:</span> <span class="string">Cookie,Set-Cookie,Authorization</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="Example-1-最简洁配置"><a href="#Example-1-最简洁配置" class="headerlink" title="Example - 1 - 最简洁配置"></a>Example - 1 - 最简洁配置</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">zuul:</span></span><br><span class="line">  <span class="attr">routes:</span></span><br><span class="line">    <span class="attr">test:</span></span><br><span class="line">      <span class="attr">path:</span> <span class="string">/test/**</span></span><br><span class="line">      <span class="attr">url:</span> <span class="string">http://127.0.0.1:9000</span> </span><br></pre></td></tr></table></figure>
+
+<p>Request URL：<a target="_blank" rel="noopener" href="http://127.0.0.1:8001/test">http://127.0.0.1:8001/test</a></p>
+<p>Zuul Forward URL：<a target="_blank" rel="noopener" href="http://127.0.0.1:9000/">http://127.0.0.1:9000/</a></p>
+<h3 id="Example-2-试验其他配置-sensitiveHeaders-amp-stripPrefix"><a href="#Example-2-试验其他配置-sensitiveHeaders-amp-stripPrefix" class="headerlink" title="Example - 2 - 试验其他配置(sensitiveHeaders &amp; stripPrefix)"></a>Example - 2 - 试验其他配置(sensitiveHeaders &amp; stripPrefix)</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">zuul:</span></span><br><span class="line">  <span class="attr">routes:</span></span><br><span class="line">    <span class="attr">test:</span></span><br><span class="line">      <span class="attr">path:</span> <span class="string">/test/**</span></span><br><span class="line">      <span class="attr">url:</span> <span class="string">http://127.0.0.1:9000</span> </span><br><span class="line">      <span class="attr">stripPrefix:</span> <span class="literal">false</span></span><br><span class="line">      <span class="attr">sensitiveHeaders:</span> <span class="string">Test-Sensitive-Header</span></span><br></pre></td></tr></table></figure>
+
+<p>Request:</p>
+<ul>
+<li>URL: <a target="_blank" rel="noopener" href="http://127.0.0.1:8001/test">http://127.0.0.1:8001/test</a></li>
+<li>Header: <ul>
+<li>Test-Sensitive-Header : ThisIsSensitiveHeader</li>
+<li>Test-nomal-Header: ThisIsNomalHeader</li>
+</ul>
+</li>
+</ul>
+<p>Zuul Forward：</p>
+<ul>
+<li>URL：<a target="_blank" rel="noopener" href="http://127.0.0.1:9000/test">http://127.0.0.1:9000/test</a></li>
+<li>Header:<ul>
+<li>Test-Sensitive-Header - 是敏感Header不转发</li>
+<li>Test-nomal-Header - 进行转发</li>
+</ul>
+</li>
+</ul>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200816225825634.png" alt="Example2-route-matched"></p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200816230622007.png" alt="Example2-请求情况"></p>
+<h2 id="转发到Service的配置"><a href="#转发到Service的配置" class="headerlink" title="转发到Service的配置"></a>转发到Service的配置</h2><h3 id="配置说明-1"><a href="#配置说明-1" class="headerlink" title="配置说明"></a>配置说明</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 转发到某个的服务 - 这个服务可以是服务发现的服务，也可以配置物理地址</span></span><br><span class="line"><span class="attr">zuul:</span></span><br><span class="line">  <span class="attr">host:</span></span><br><span class="line">    <span class="attr">connect-timeout-millis:</span> <span class="number">2000</span></span><br><span class="line">    <span class="attr">socket-timeout-millis:</span> <span class="number">10000</span></span><br><span class="line">  <span class="attr">routes:</span></span><br><span class="line">    <span class="attr">test-service:</span></span><br><span class="line">      <span class="attr">path:</span> <span class="string">/test/**</span></span><br><span class="line">      <span class="comment"># 服务名称: 如果使用服务治理框架那么填写服务名称，否则自定义服务名称</span></span><br><span class="line">      <span class="attr">serviceId:</span> <span class="string">test-service</span></span><br><span class="line">      <span class="comment"># 是否开启重试，具体重试设置是在Ribbon的配置中设置</span></span><br><span class="line">      <span class="attr">retryable:</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">...</span></span><br><span class="line">      </span><br><span class="line"><span class="comment"># hystrix配置：提供熔断配置</span></span><br><span class="line"><span class="attr">hystrix:</span></span><br><span class="line">  <span class="attr">command:</span></span><br><span class="line">    <span class="comment"># 服务名称：default or 自己的服务名称</span></span><br><span class="line">    <span class="attr">default:</span></span><br><span class="line">      <span class="attr">execution:</span></span><br><span class="line">        <span class="attr">isolation:</span></span><br><span class="line">          <span class="attr">thread:</span></span><br><span class="line">            <span class="attr">timeoutInMilliseconds:</span> <span class="number">3000</span></span><br><span class="line">            <span class="string">...</span></span><br><span class="line"></span><br><span class="line"><span class="attr">ribbon:</span></span><br><span class="line">	<span class="comment"># 是否使用 Eureka</span></span><br><span class="line">  <span class="attr">eureka:</span></span><br><span class="line">    <span class="attr">enabled:</span> <span class="literal">false</span></span><br><span class="line">  <span class="comment"># 对实例重试的次数(不包括每个实例的首次的请求)</span></span><br><span class="line">  <span class="attr">MaxAutoRetries:</span> <span class="number">1</span></span><br><span class="line">  <span class="comment"># 同一个服务 重试其他实例数量</span></span><br><span class="line">  <span class="comment"># eg: listOfServers: s1, s2, s3  当此配置为1，第一次访问s1, 请求重试只会在s1、s2中进行</span></span><br><span class="line">  <span class="attr">MaxAutoRetriesNextServer:</span> <span class="number">1</span></span><br><span class="line">  <span class="comment"># 是否所有操作都允许重试。默认值为false</span></span><br><span class="line">  <span class="attr">OkToRetryOnAllOperations:</span> <span class="literal">true</span></span><br><span class="line">  <span class="string">...</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 服务的相关配置</span></span><br><span class="line"><span class="attr">test-service:</span></span><br><span class="line">  <span class="attr">ribbon:</span></span><br><span class="line">    <span class="comment"># 在提供的server列表中获取服务实例</span></span><br><span class="line">    <span class="attr">NIWSServerListClassName:</span> <span class="string">com.netflix.loadbalancer.ConfigurationBasedServerList</span></span><br><span class="line">    <span class="attr">listOfServers:</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span><span class="string">:9000,</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span><span class="string">:9001</span></span><br><span class="line">    <span class="string">...</span></span><br></pre></td></tr></table></figure>
+
+<p>基本配置是和前面提到的转发到物理地址的配置是相同的，不同的是这里增加了Ribbon和Hytrix的相关配置。</p>
+<p>匹配路由映射到服务，服务是由服务治理框架提供，如Eureka、Consul。之后通过Ribbon，进行负载均衡，Hytrix负责防护熔断。</p>
+<p>所以说Zuul除了路由配置是自身提供的，其余的配置是由Ribbon和Hytrix提供的。</p>
+<h3 id="Example-3-Ribbon的简单配置"><a href="#Example-3-Ribbon的简单配置" class="headerlink" title="Example - 3 - Ribbon的简单配置"></a>Example - 3 - Ribbon的简单配置</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">zuul:</span></span><br><span class="line">  <span class="attr">routes:</span></span><br><span class="line">    <span class="attr">test-service:</span></span><br><span class="line">      <span class="attr">path:</span> <span class="string">/test/**</span></span><br><span class="line">      <span class="attr">serviceId:</span> <span class="string">test-service</span></span><br><span class="line">      <span class="attr">stripPrefix:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line"><span class="attr">test-service:</span></span><br><span class="line">  <span class="attr">ribbon:</span></span><br><span class="line">    <span class="attr">listOfServers:</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span><span class="string">:9000</span></span><br></pre></td></tr></table></figure>
+
+<p>Request URL：<a target="_blank" rel="noopener" href="http://127.0.0.1:8001/test">http://127.0.0.1:8001/test</a><br>Zuul Forward URL：<a target="_blank" rel="noopener" href="http://127.0.0.1:9000/test">http://127.0.0.1:9000/test</a></p>
+<h3 id="Example-4-重试"><a href="#Example-4-重试" class="headerlink" title="Example - 4 - 重试"></a>Example - 4 - 重试</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">zuul:</span></span><br><span class="line">  <span class="attr">routes:</span></span><br><span class="line">    <span class="attr">test-service:</span></span><br><span class="line">      <span class="attr">path:</span> <span class="string">/test/**</span></span><br><span class="line">      <span class="attr">serviceId:</span> <span class="string">test-service</span></span><br><span class="line">      <span class="attr">stripPrefix:</span> <span class="literal">false</span></span><br><span class="line">      <span class="comment"># 开启重试</span></span><br><span class="line">      <span class="attr">retryable:</span> <span class="literal">true</span></span><br><span class="line">      </span><br><span class="line"><span class="comment"># 具体重试规则在ribbon中配置</span></span><br><span class="line"><span class="attr">ribbon:</span></span><br><span class="line">  <span class="attr">eureka:</span></span><br><span class="line">    <span class="attr">enabled:</span> <span class="literal">false</span></span><br><span class="line">  <span class="attr">MaxAutoRetries:</span> <span class="number">1</span></span><br><span class="line">  <span class="attr">MaxAutoRetriesNextServer:</span> <span class="number">1</span></span><br><span class="line">  </span><br><span class="line"><span class="attr">test-service:</span></span><br><span class="line">  <span class="attr">ribbon:</span></span><br><span class="line">    <span class="attr">listOfServers:</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span><span class="string">:9000,</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span><span class="string">:9001,</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span><span class="string">:9002</span></span><br></pre></td></tr></table></figure>
+
+<p>Request URL：<a target="_blank" rel="noopener" href="http://127.0.0.1:8001/test">http://127.0.0.1:8001/test</a></p>
+<p>第一步：</p>
+<ul>
+<li>转发到：<a target="_blank" rel="noopener" href="http://127.0.0.1:9000/test">http://127.0.0.1:9000/test</a></li>
+<li>返回：code: 500</li>
+</ul>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200817190925927.png" alt="Example4-第一次请求到端口9000"></p>
+<p>第二步：</p>
+<ul>
+<li>重试：<a target="_blank" rel="noopener" href="http://127.0.0.1:9000/test">http://127.0.0.1:9000/test</a></li>
+<li>返回：code: 500</li>
+</ul>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200817191248495.png" alt="Example4-重试第一次端口号9001"></p>
+<p>第三步和第四步：</p>
+<ul>
+<li>重试：<a target="_blank" rel="noopener" href="http://127.0.0.1:9001/test">http://127.0.0.1:9001/test</a></li>
+<li>返回：因为9001端口没有启动服务，返回没有连接</li>
+</ul>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200817191521361.png" alt="Example4-重试转发至服务的另一个实例 端口号9001"></p>
+<p>至此，本次请求，一共重试了3次。</p>
+<p>测试代码：<a target="_blank" rel="noopener" href="https://github.com/goldpumpkin/learn-demo">https://github.com/goldpumpkin/learn-demo</a></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>Zuul的配置，包括了自己的路由配置、Ribbon配置以及Hytrix配置。其中路由配置分为两种，一种是把请求转发到物理地址，另一种是把请求转发到微服务。要想掌握和配置好Zuul，那么必须学习Ribbon和Hytrix，这样才能很好的驾驭Zuul。</p>
+<p><strong>我的个人水平有限，欢迎大家指正，欢迎交流~</strong></p>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/08/06/Zuul%E9%85%8D%E7%BD%AE/" data-id="ckfp8s2fe0005i3gx4yhpd2ep" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/08/19/Zuul%E7%9A%84%E8%B7%AF%E7%94%B1%E5%8C%B9%E9%85%8D/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            Zuul 的路由匹配
+          
+        </div>
+      </a>
+    
+    
+      <a href="/2020/07/21/SpringCloud%E6%95%B4%E5%90%88Zuul%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="article-nav-link">
+        <strong class="article-nav-caption">后一篇</strong>
+        <div class="article-nav-title">SpringCloud 整合 Zuul 源码分析</div>
+      </a>
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>

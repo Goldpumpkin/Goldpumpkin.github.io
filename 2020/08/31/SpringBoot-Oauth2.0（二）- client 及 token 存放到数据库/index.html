@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    SpringBoot-Oauth2.0（二）—— client 及 token 存放到数据库 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-SpringBoot-Oauth2.0（二）- client 及 token 存放到数据库" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      SpringBoot-Oauth2.0（二）—— client 及 token 存放到数据库
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/08/31/SpringBoot-Oauth2.0%EF%BC%88%E4%BA%8C%EF%BC%89-%20client%20%E5%8F%8A%20token%20%E5%AD%98%E6%94%BE%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-date">
+  <time datetime="2020-08-31T10:19:56.404Z" itemprop="datePublished">2020-08-31</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p><a target="_blank" rel="noopener" href="https://juejin.im/post/6865971696017833997">上一篇</a>我们已经用最简单的方式，搭建了一个授权方式是 client_credentials 的 Oauth2 的流程。那么现在，在此基础上，我们就再往前迈一步，我们把 client 信息和 token 存储到数据库当中，方便我们管理。并且密码需要保证安全，那么就需要加密。目标很明确，那我们开始吧！</p>
+<a id="more"></a>
+
+<h2 id="client-amp-token存储到数据库"><a href="#client-amp-token存储到数据库" class="headerlink" title="client&amp;token存储到数据库"></a>client&amp;token存储到数据库</h2><h3 id="步骤："><a href="#步骤：" class="headerlink" title="步骤："></a>步骤：</h3><ol>
+<li>数据库准备：只创建我们需要用到的表</li>
+<li>添加数据库相关依赖：使用 mysql 数据库</li>
+<li>Oauth 存储配置的设置</li>
+<li>验证</li>
+</ol>
+<h3 id="数据库准备"><a href="#数据库准备" class="headerlink" title="数据库准备"></a>数据库准备</h3><p>在本地数据库，创建两张表：</p>
+<ul>
+<li>一张表存储 client 相关信息</li>
+<li>另一张表存储 token</li>
+</ul>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># client 相关信息</span></span><br><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> oauth_client_details</span><br><span class="line">(</span><br><span class="line">    client_id               <span class="built_in">VARCHAR</span>(<span class="number">256</span>) PRIMARY <span class="keyword">KEY</span> <span class="keyword">comment</span> <span class="string">&#x27;必填，Oauth2 client_id&#x27;</span>,</span><br><span class="line">    resource_ids            <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;可选，资源id集合，多个资源用英文逗号隔开&#x27;</span>,</span><br><span class="line">    client_secret           <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;必填，Oauth2 client_secret&#x27;</span>,</span><br><span class="line">    <span class="keyword">scope</span>                   <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;必填，Oauth2 权限范围，比如 read，write等可自定义&#x27;</span>,</span><br><span class="line">    authorized_grant_types  <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;必填，Oauth2 授权类型，支持类型：authorization_code,password,refresh_token,implicit,client_credentials，多个用英文逗号隔开&#x27;</span>,</span><br><span class="line">    web_server_redirect_uri <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;可选，客户端的重定向URI,当grant_type为authorization_code或implicit时,此字段是需要的&#x27;</span>,</span><br><span class="line">    authorities             <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;可选，指定客户端所拥有的Spring Security的权限值&#x27;</span>,</span><br><span class="line">    access_token_validity   <span class="built_in">INTEGER</span> <span class="keyword">comment</span> <span class="string">&#x27;可选，access_token的有效时间值(单位:秒)，不填写框架(类refreshTokenValiditySeconds)默认12小时&#x27;</span>,</span><br><span class="line">    refresh_token_validity  <span class="built_in">INTEGER</span> <span class="keyword">comment</span> <span class="string">&#x27;可选，refresh_token的有效时间值(单位:秒)，不填写框架(类refreshTokenValiditySeconds)默认30天&#x27;</span>,</span><br><span class="line">    additional_information  <span class="built_in">VARCHAR</span>(<span class="number">4096</span>) <span class="keyword">comment</span> <span class="string">&#x27;预留字段，格式必须是json&#x27;</span>,</span><br><span class="line">    autoapprove             <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;该字段适用于grant_type=&quot;authorization_code&quot;的情况下，用户是否自动approve操作&#x27;</span></span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="comment"># token 存储</span></span><br><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> oauth_access_token</span><br><span class="line">(</span><br><span class="line">    token_id          <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;MD5加密后存储的access_token&#x27;</span>,</span><br><span class="line">    token             <span class="built_in">BLOB</span> <span class="keyword">comment</span> <span class="string">&#x27;access_token序列化的二进制数据格式&#x27;</span>,</span><br><span class="line">    authentication_id <span class="built_in">VARCHAR</span>(<span class="number">256</span>) PRIMARY <span class="keyword">KEY</span> <span class="keyword">comment</span> <span class="string">&#x27;主键，其值是根据当前的username(如果有),client_id与scope通过MD5加密生成的,具体实现参见DefaultAuthenticationKeyGenerator&#x27;</span>,</span><br><span class="line">    user_name         <span class="built_in">VARCHAR</span>(<span class="number">256</span>),</span><br><span class="line">    client_id         <span class="built_in">VARCHAR</span>(<span class="number">256</span>),</span><br><span class="line">    <span class="keyword">authentication</span>    <span class="built_in">BLOB</span> <span class="keyword">comment</span> <span class="string">&#x27;将OAuth2Authentication对象序列化后的二进制数据&#x27;</span>,</span><br><span class="line">    refresh_token     <span class="built_in">VARCHAR</span>(<span class="number">256</span>) <span class="keyword">comment</span> <span class="string">&#x27;refresh_token的MD5加密后的数据&#x27;</span></span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>之后，我们需要添加自定义 client 信息。本次演示添加的 client 信息如下（依旧本着尽量能不配置就不配置的原则）：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">INSERT</span> <span class="keyword">INTO</span> oauth_client_details (client_id, resource_ids, client_secret, <span class="keyword">scope</span>, authorized_grant_types, web_server_redirect_uri, authorities, access_token_validity, refresh_token_validity, additional_information, autoapprove) <span class="keyword">VALUES</span> (<span class="string">&#x27;gold&#x27;</span>, <span class="string">&#x27;res&#x27;</span>, <span class="string">&#x27;&#123;noop&#125;123456&#x27;</span>, <span class="string">&#x27;write&#x27;</span>, <span class="string">&#x27;client_credentials&#x27;</span>, <span class="literal">null</span>, <span class="literal">null</span>, <span class="literal">null</span>, <span class="literal">null</span>, <span class="literal">null</span>, <span class="literal">null</span>);</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>说明</p>
+<ol>
+<li>在官方给出的源码当中，是有对应的 <a target="_blank" rel="noopener" href="https://github.com/spring-projects/spring-security-oauth/blob/master/spring-security-oauth2/src/test/resources/schema.sql">schema.sql</a> 文件，这里只创建涉及我们示例中需要的表</li>
+<li>对两张表的操作，我们可以去看这两个类：JdbcClientDetailsService &amp; JdbcTokenStore</li>
+<li>此外本示例，添加了 resource_ids ，注意在配置 <code>ResourceServerSecurityConfigurer</code> 中对应</li>
+</ol>
+</blockquote>
+<h3 id="Pom"><a href="#Pom" class="headerlink" title="Pom"></a>Pom</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>mysql<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mysql-connector-java<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-jdbc<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="认证服务器代码修改"><a href="#认证服务器代码修改" class="headerlink" title="认证服务器代码修改"></a>认证服务器代码修改</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@EnableAuthorizationServer</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MyAuthorizationServerConfigurer</span> <span class="keyword">extends</span> <span class="title">AuthorizationServerConfigurerAdapter</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> DataSource dataSource;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">MyAuthorizationServerConfigurer</span><span class="params">(DataSource dataSource)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.dataSource = dataSource;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(ClientDetailsServiceConfigurer clients)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        clients.jdbc(dataSource);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(AuthorizationServerEndpointsConfigurer endpoints)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        endpoints.tokenStore(<span class="keyword">new</span> JdbcTokenStore(dataSource));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码只显示改动的部分，修改 client 的配置和 tokenStore 的配置，都进行添加数据源即可</p>
+<h3 id="请求-token"><a href="#请求-token" class="headerlink" title="请求 token"></a>请求 token</h3><p>下面的请求是在 postman 中进行的。 base_url 为设置的全局变量，实际为 <a target="_blank" rel="noopener" href="http://127.0.0.1:8080/">http://127.0.0.1:8080</a></p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200901102558730.png" alt="获取token"></p>
+<h3 id="获取资源"><a href="#获取资源" class="headerlink" title="获取资源"></a>获取资源</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200901102640629.png" alt="请求资源"></p>
+<h3 id="观察数据库"><a href="#观察数据库" class="headerlink" title="观察数据库"></a>观察数据库</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200901102741912.png" alt="token存储"></p>
+<p>由于 token 在数据库是存储的是二进制形式，但是我们通过 client_id 数据，可以看出是我们刚刚请求的 client。</p>
+<p>到此为止我们已经是实现了，把 client 及 token 信息存储到数据库了，这样更便于我们对 client 及 token 数据的管理。但是数据库存储明文密码是不安全，那么接下来，我们对 client_secret 进行加密。</p>
+<h2 id="client-secret-加密"><a href="#client-secret-加密" class="headerlink" title="client_secret 加密"></a>client_secret 加密</h2><h3 id="配置-passwordEncoder"><a href="#配置-passwordEncoder" class="headerlink" title="配置 passwordEncoder"></a>配置 passwordEncoder</h3><p>SpringBoot Oauth 本身支持的加密算法有很多种，详细信息可以看类 <code>PasswordEncoderFactories</code> ，包括我们最常用的 MD5、SHA 等，我们使用 <a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/Bcrypt">bcrypt 加密算法</a>， 那么直接配置支持全部算法的 passwordEncoder ，即 <code>DelegatingPasswordEncoder</code> 。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(ClientDetailsServiceConfigurer clients)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        	  		clients.jdbc(dataSource).passwordEncoder(PasswordEncoderFactories.createDelegatingPasswordEncoder());</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="加密-client-secret"><a href="#加密-client-secret" class="headerlink" title="加密 client_secret"></a>加密 client_secret</h3><p>既然我们这次使用 bcrypt 加密， 直接可以找到 <code>BCryptPasswordEncoder</code> ，通过它可以给我们的密码进行加密，并把密码存储于数据库当中。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@NoArgsConstructor(access = AccessLevel.PRIVATE)</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PasswordEncodeUtil</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> BCryptPasswordEncoder bcryptEncoder = <span class="keyword">new</span> BCryptPasswordEncoder();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> String <span class="title">bcryptEncode</span><span class="params">(String password)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> bcryptEncoder.encode(password);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> String <span class="title">genOauthEncodePwd</span><span class="params">(String password)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;&#123;bcrypt&#125;&quot;</span> + bcryptEncode(password);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        String oriPwd = <span class="string">&quot;123456&quot;</span>;</span><br><span class="line">        System.out.println(genOauthEncodePwd(oriPwd));</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>原密码：123456<br>加密后密码：{bcrypt}$2a$10$NPxtsEUMmBGTlzVXlT.scubSCXNEDlBAq2r2t7iQFB/.RaNBlh0nO</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200901113958428.png" alt="client_sercret 加密"></p>
+<p><em>注意：加密密码的前缀 大括号 “{xxx}”，是指定算法名称。因为框架支持多种算法，那么必须需要带有算法前缀。</em></p>
+<h3 id="请求获取-token"><a href="#请求获取-token" class="headerlink" title="请求获取 token"></a>请求获取 token</h3><p>下面的请求是在 postman 中进行的。 base_url 为设置的全局变量，实际为 <a target="_blank" rel="noopener" href="http://127.0.0.1:8080/">http://127.0.0.1:8080</a></p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200901114224122.png" alt="请求token"></p>
+<h3 id="请求资源"><a href="#请求资源" class="headerlink" title="请求资源"></a>请求资源</h3><p><img src="http://qiniu.5ires.top/uPic/image-20200901114259361.png" alt="请求资源"></p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>本文主要是以 client_credentials 的授权方式，把 client 和 token 信息存储在数据库当中，来方便我们管理。同时，为了保证密码的安全，我们把 client_secret 用 bcrypt 算法进行了加密操作，并存储到数据库当中。有了上一篇基础，这篇整体挺简单的吧，那同学们动起来，实现一下吧！</p>
+<p><strong>个人水平有限，欢迎大家指正，一起交流哦<del>~</del></strong></p>
+<p><strong>demo：<a target="_blank" rel="noopener" href="https://github.com/goldpumpkin/learn-demo/tree/master/springboot-oauth">https://github.com/goldpumpkin/learn-demo/tree/master/springboot-oauth</a></strong> </p>
+<p><em>Reference:</em></p>
+<ol>
+<li><a target="_blank" rel="noopener" href="http://andaily.com/spring-oauth-server/db_table_description.html">spring-oauth-server 数据库表说明</a></li>
+</ol>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/08/31/SpringBoot-Oauth2.0%EF%BC%88%E4%BA%8C%EF%BC%89-%20client%20%E5%8F%8A%20token%20%E5%AD%98%E6%94%BE%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" data-id="ckfp8s2fb0001i3gx2428g7qc" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/09/01/SpringBoot-oauth%20(%E4%B8%89)-%20Token%20%E7%9A%84%E5%AD%98%E5%82%A8%E6%96%B9%E6%A1%88/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            SpringBoot-Oauth2.0（三） —— Token 的存储方案
+          
+        </div>
+      </a>
+    
+    
+      <a href="/2020/08/26/SpringBoot-Oauth2.0%EF%BC%88%E4%B8%80%EF%BC%89%20-%20%E5%88%9D%E8%AF%86/" class="article-nav-link">
+        <strong class="article-nav-caption">后一篇</strong>
+        <div class="article-nav-title">SpringBoot-Oauth2.0（一） —— 初识</div>
+      </a>
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>

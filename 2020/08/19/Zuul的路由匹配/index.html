@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    Zuul 的路由匹配 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-Zuul的路由匹配" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      Zuul 的路由匹配
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/08/19/Zuul%E7%9A%84%E8%B7%AF%E7%94%B1%E5%8C%B9%E9%85%8D/" class="article-date">
+  <time datetime="2020-08-19T08:49:08.114Z" itemprop="datePublished">2020-08-19</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p>上一篇，我们已经知道了  Zuul 的配置，其中 Zuul 的路由匹配也是核心配置之一，那 Zuul 是怎么匹配我们的请求，从而让我们的请求进入到一系列的 ZuulFilter 呢？那就和我一起去刨一刨吧。</p>
+<a id="more"></a>
+
+<h2 id="Zuul的路由匹配规则是什么呢？"><a href="#Zuul的路由匹配规则是什么呢？" class="headerlink" title="Zuul的路由匹配规则是什么呢？"></a>Zuul的路由匹配规则是什么呢？</h2><p>拿出我的必杀器，DDDDebug 一下：</p>
+<ol>
+<li><p>Debug 显示匹配路由是先从 Spring 在<code>AbstractUrlHandlerMapping</code>匹配<code>HandlerExecutionChain</code>开始</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200819230258789.png" alt="Spring-Match-ZuulController"></p>
+</li>
+<li><p>之后进入到<code>ZuulFilter</code>的 Pre 类型的FIlter当中的<code>PreDecorationFilter</code> ，匹配对应的<code>ZuulRoute</code></p>
+</li>
+<li><p>首先把请求的路由修理一下，去掉context-path。就像例子当中，请求 url 中<code>/text/test</code> 去掉了 <code>/text</code>，再接着执行</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200819190711091.png" alt="去掉context-path"></p>
+</li>
+<li><p>之后进入到<code>SimpleRouteLocator</code>，判断是否属于 Zuul 忽略处理的请求，如果不是，再匹配对应<code>ZuulRoute</code>。这里可以发现匹配功能都是由<code>AntPathMatcher</code>来负责</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200819191434405.png" alt="SimpleRouteLocator匹配URL"></p>
+</li>
+</ol>
+<p>那我们发现，不管是 Spring 的匹配 Handler 还是 <code>PreDecorationFilter</code> 匹配 <code>ZuulRoute</code>，都用到的是<code>AntPathMatcher</code>。那我们现在只需要搞明白<code>AntPathMatcher</code>匹配规则就好了。Go on!</p>
+<h2 id="ANT-Style-Pattern"><a href="#ANT-Style-Pattern" class="headerlink" title="ANT Style Pattern"></a>ANT Style Pattern</h2><p>匹配规则如下：</p>
+<table>
+<thead>
+<tr>
+<th>符号</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>?</td>
+<td>匹配一个字符</td>
+</tr>
+<tr>
+<td>*</td>
+<td>匹配0个或者更多的字符</td>
+</tr>
+<tr>
+<td>**</td>
+<td>匹配路径中0个或者更多目录</td>
+</tr>
+</tbody></table>
+<p>举例：</p>
+<table>
+<thead>
+<tr>
+<th>例子</th>
+<th>解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>com/t?st.jsp</code></td>
+<td>可以匹配 com/test.jsp 或者 <code>com/tast.jsp</code> 或者 <code>com/txst.jsp </code> 等等</td>
+</tr>
+<tr>
+<td><code>com/*.jsp</code></td>
+<td>匹配到 com 目录下所有 .jsp 文件</td>
+</tr>
+<tr>
+<td><code>com/**/test.jsp</code></td>
+<td>匹配在 com 路径下，所有的 test.jsp 文件</td>
+</tr>
+<tr>
+<td><code>org/springframework/**/*.jsp</code></td>
+<td>匹配 org/springframework 路径下所有 .jsp文件</td>
+</tr>
+<tr>
+<td><code>org/**/servlet/bla.jsp</code></td>
+<td>可以匹配 org 路径下，后面多层目录且最后一个目录是 servlet/bla.jsp 的路径</td>
+</tr>
+</tbody></table>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>其实，刨下来 Zuul 的路由匹配还挺简单的，主要理解并掌握 Ant 的匹配规则就完事儿了。来动手试一试吧。</p>
+<p>Demo地址是：<a target="_blank" rel="noopener" href="https://github.com/goldpumpkin/learn-demo">https://github.com/goldpumpkin/learn-demo</a></p>
+<p><em>Ref.</em><br><em><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/2952196/learning-ant-path-style">stackoverflow-learning-ant-path-style</a></em></p>
+<p><strong>我的个人水平有限，欢迎大家指正，欢迎交流~</strong></p>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/08/19/Zuul%E7%9A%84%E8%B7%AF%E7%94%B1%E5%8C%B9%E9%85%8D/" data-id="ckfp8s2fd0004i3gx4tdf39fm" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/08/26/SpringBoot-Oauth2.0%EF%BC%88%E4%B8%80%EF%BC%89%20-%20%E5%88%9D%E8%AF%86/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            SpringBoot-Oauth2.0（一） —— 初识
+          
+        </div>
+      </a>
+    
+    
+      <a href="/2020/08/06/Zuul%E9%85%8D%E7%BD%AE/" class="article-nav-link">
+        <strong class="article-nav-caption">后一篇</strong>
+        <div class="article-nav-title">Zuul 的配置</div>
+      </a>
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>
+    Hytrix线程池设置坑 |
+    
+    鱼da王</title>
+  
+    <link rel="shortcut icon" href="/favicon.ico">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+<script src="/js/pace.min.js"></script>
+
+<meta name="generator" content="Hexo 5.2.0"><link rel="alternate" href="/atom.xml" title="鱼da王" type="application/atom+xml">
+</head>
+
+<body>
+<main class="content">
+  <section class="outer">
+  <article id="post-Hytrix线程池设置坑" class="article article-type-post" itemscope itemprop="blogPost" data-scroll-reveal>
+
+    <div class="article-inner">
+        
+            <header class="article-header">
+                
+  
+    <h1 class="article-title" itemprop="name">
+      Hytrix线程池设置坑
+    </h1>
+  
+  
+
+
+
+
+            </header>
+            
+
+                
+                    <div class="article-meta">
+                        <a href="/2020/07/14/Hytrix%E7%BA%BF%E7%A8%8B%E6%B1%A0%E8%AE%BE%E7%BD%AE%E5%9D%91/" class="article-date">
+  <time datetime="2020-07-14T03:45:16.635Z" itemprop="datePublished">2020-07-14</time>
+</a>
+                            
+                    </div>
+                    
+
+                        
+                            
+    <div class="tocbot"></div>
+
+
+
+
+
+                                
+
+                                    <div class="article-entry" itemprop="articleBody">
+                                        
+
+
+                                            
+
+                                                
+                                                                    <p>最近遇到修改 Hytrix 线程池配置，不生效的情况。然后发现了一些坑。。。</p>
+<a id="more"></a>
+
+<h3 id="Background"><a href="#Background" class="headerlink" title="Background"></a>Background</h3><p>基于hystrix版本</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">     <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.netflix.hystrix<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">     <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>hystrix-core<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">     <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.5.12<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>配置</p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">hystrix.threadpool.default.coreSize</span>=<span class="string">10</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.maximumSize</span>=<span class="string">15</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.allowMaximumSizeToDivergeFromCoreSize</span>=<span class="string">true</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.maxQueueSize</span>=<span class="string">1000</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.queueSizeRejectionThreshold</span>=<span class="string">1000</span></span><br></pre></td></tr></table></figure>
+
+<p>现象</p>
+<p>在此配置之下，测试线程数始终不能达到最大线程数</p>
+<h3 id="Why"><a href="#Why" class="headerlink" title="Why"></a>Why</h3><p>是什么样的逻辑，导致<code>maximumSize</code>配置失效？需要一步步深入源码探索</p>
+<ul>
+<li><p>hytrixs使用的线程池是jdk的线程池吗？</p>
+<p><code>HystrixThreadPoolProperties</code> ：hytrix线程池的配置类</p>
+<p><code>HystrixThreadPool</code> ：hytrix的线程池interface，其中有静态内部类<code>Factory</code>,一眼看到<code>getInstance</code>方法，追溯到另一个静态内部类<code>HystrixThreadPoolDefault</code>，再到<code>HystrixConcurrencyStrategy</code>,终于找到了线程池的创建方法<code>getThreadPool</code></p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200714190115273.png" alt="image-20200714190115273"></p>
+<p>由此可以看出hytrix是使用jdk的线程池，所以线程池的运行规则应该都是一样的。</p>
+<blockquote>
+<p>回顾java线程池的运行规则：</p>
+<ul>
+<li>假设第一次运行线程池，当有任务来的时候，首先创建线程直到线程数达到核心线程数</li>
+<li>核心线程数量的线程被占满，之后的任务加入到阻塞队列当中</li>
+<li>当核心线程数和阻塞队列都被占满，之后的任务到达线程池，线程池则会创建更多的线程，直到存在的线程数量达到最大线程配置的数量</li>
+<li>当最大线程数量的线程和队列都被占满，之后的任务到达线程池，那么线程池会根据拒绝策略执行相关逻辑</li>
+</ul>
+</blockquote>
+</li>
+</ul>
+<ul>
+<li><p>导致的失效的具体代码逻辑</p>
+<p><code>HystrixContextScheduler</code>,由于hytrix的源代码是使用<code>RxJava</code>框架来写的，不太理解，最终打断点找到了此类，进入了<code>schedule</code>方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Subscription <span class="title">schedule</span><span class="params">(Action0 action)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (threadPool != <span class="keyword">null</span>) &#123;</span><br><span class="line">  		<span class="comment">// 线程池队列无可用空间时，直接拒绝任务  </span></span><br><span class="line">      <span class="keyword">if</span> (!threadPool.isQueueSpaceAvailable()) &#123;</span><br><span class="line">         <span class="keyword">throw</span> <span class="keyword">new</span> RejectedExecutionException(<span class="string">&quot;Rejected command because thread-pool queueSize is at rejection threshold.&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">   <span class="keyword">return</span> worker.schedule(<span class="keyword">new</span> HystrixContexSchedulerAction(concurrencyStrategy, action));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到，再添加action之前，会校验线程池的队列空间是否可用。具体逻辑如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isQueueSpaceAvailable</span><span class="params">()</span> </span>&#123;</span><br><span class="line">   <span class="comment">// 1. 配置的队列的数量小于等于0，直接返回true。那么继上一步任务会给到线程池，由它决定任务执行与否</span></span><br><span class="line">   <span class="keyword">if</span> (queueSize &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">     <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">   &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">     <span class="comment">// 2. 线程池中已有任务队列的数量 vs queueSizeRejectionThreshold配置数量</span></span><br><span class="line">     <span class="keyword">return</span> threadPool.getQueue().size() &lt; properties.queueSizeRejectionThreshold().get();</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>根据此代码逻辑可以得出：</p>
+<ul>
+<li>配置线程池队列大小参数为-1时，任务的执行与否交给java线程池决定，此时队列是同步队列，那么当并发任务数量大于核心线程数小于最大线程数的时候，是应该会创建新的线程来执行此任务。那么<code>maximumSize</code>的配置是有效的</li>
+<li>配置线程池队列的<code>maxQueueSize</code>大于等于<code>queueSizeRejectionThreshold</code>配置时。若此时并发数达到了核心线程数和<code>maxQueueSize</code>配置之和，再有任务需要执行时，根据此逻辑，会返回<code>false</code>，拒绝任务的执行，并不会交给线程池处理。从而使得<code>maximumSize</code>的配置是无效的。</li>
+</ul>
+<p>由此，我们追溯到了<code>maximumSize</code>配置无效的原因。</p>
+</li>
+</ul>
+<h3 id="让maximumSize变得有效"><a href="#让maximumSize变得有效" class="headerlink" title="让maximumSize变得有效"></a>让<code>maximumSize</code>变得有效</h3><ul>
+<li>不使用线程池的队列，直接将maxQueueSize配置设为 -1</li>
+<li><code>queueSizeRejectionThreshold</code>配置大于<code>maxQueueSize</code>也可以让线程池中线程的数量达到<code>maximumSize</code>数量，但是此时<code>queueSizeRejectionThreshold</code>配置并没有起到它应该承担的意义，因为线程池中队列的大小永远不可能达到<code>queueSizeRejectionThreshold</code>配置的数量</li>
+</ul>
+<h3 id="验证分析"><a href="#验证分析" class="headerlink" title="验证分析"></a>验证分析</h3><ul>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/Netflix/Hystrix/wiki/Configuration#ThreadPool">hytrix线程池配置简介</a></p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 核心线程数 默认值10</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.coreSize</span>=<span class="string">10</span></span><br><span class="line"><span class="comment"># 最大线程数 默认值10 在1.5.9版本之前该值总是等于coreSize</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.maximumSize</span>=<span class="string">10</span></span><br><span class="line"><span class="comment"># 阻塞队列大小 默认值-1表示使用同步队列 </span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.maxQueueSize</span>=<span class="string">-1</span></span><br><span class="line"><span class="comment"># 阻塞队列大小拒绝阈值 默认值为5 当maxQueueSize=-1时，不起作用</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.queueSizeRejectionThreshold</span>=<span class="string">5</span></span><br><span class="line"><span class="comment"># 释放线程时间 min为单位 默认为1min，当最大线程数大于核心线程数的时</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.keepAliveTimeMinutes</span>=<span class="string">1</span></span><br><span class="line"><span class="comment"># 是否允许maximumSize配置生效，默认值为false</span></span><br><span class="line"><span class="meta">hystrix.threadpool.default.allowMaximumSizeToDivergeFromCoreSize</span>=<span class="string">true</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>代码验证</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HystrixThreadPoolTest</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">      	<span class="comment">// 变量</span></span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> coreSize = <span class="number">5</span>, maximumSize = <span class="number">10</span>, maxQueueSize = <span class="number">5</span>, rejThresholdSize = <span class="number">6</span>;</span><br><span class="line">        HystrixCommand.Setter commandConfig = generateCommandConfig(coreSize, maximumSize, maxQueueSize, rejThresholdSize);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Run command once, so we can get metrics.</span></span><br><span class="line">        runOnce(commandConfig);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 模拟并发</span></span><br><span class="line">        <span class="keyword">final</span> CountDownLatch stopLatch = <span class="keyword">new</span> CountDownLatch(<span class="number">1</span>);</span><br><span class="line">        List&lt;Thread&gt; threads = <span class="keyword">new</span> ArrayList&lt;Thread&gt;();</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; coreSize + maximumSize + maxQueueSize + rejThresholdSize; i++) &#123;</span><br><span class="line">            <span class="keyword">final</span> <span class="keyword">int</span> fi = i + <span class="number">1</span>;</span><br><span class="line">            String threadName = <span class="string">&quot;TestThread-&quot;</span> + fi;</span><br><span class="line">            Thread thread = <span class="keyword">new</span> Thread(() -&gt; &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    HystrixCommand&lt;Void&gt; command = <span class="keyword">new</span> HystrixCommand&lt;Void&gt;(commandConfig) &#123;</span><br><span class="line">                        <span class="meta">@Override</span></span><br><span class="line">                        <span class="function"><span class="keyword">protected</span> Void <span class="title">run</span><span class="params">()</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">                            stopLatch.await();</span><br><span class="line">                            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125;;</span><br><span class="line">                    command.execute();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                    System.out.println(<span class="string">&quot;Thread:&quot;</span> + threadName + <span class="string">&quot; got rejected.&quot;</span>);</span><br><span class="line">                    System.out.println();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">            thread.setName(threadName);</span><br><span class="line">            threads.add(thread);</span><br><span class="line">            thread.start();</span><br><span class="line">            Thread.sleep(<span class="number">200</span>);</span><br><span class="line"></span><br><span class="line">            System.out.println(<span class="string">&quot;start:&quot;</span> + threadName);</span><br><span class="line">            printThreadPoolStatus();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 线程执行释放</span></span><br><span class="line">        stopLatch.countDown();</span><br><span class="line">        <span class="keyword">for</span> (Thread thread : threads) &#123;</span><br><span class="line">            thread.join();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">printThreadPoolStatus</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">for</span> (HystrixThreadPoolMetrics threadPoolMetrics : HystrixThreadPoolMetrics.getInstances()) &#123;</span><br><span class="line">            String name = threadPoolMetrics.getThreadPoolKey().name();</span><br><span class="line">            Number poolSize = threadPoolMetrics.getCurrentPoolSize();</span><br><span class="line">            Number queueSize = threadPoolMetrics.getCurrentQueueSize();</span><br><span class="line">            System.out.println(<span class="string">&quot;ThreadPoolKey: &quot;</span> + name + <span class="string">&quot;, PoolSize: &quot;</span> + poolSize + <span class="string">&quot;, QueueSize: &quot;</span> + queueSize);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> HystrixCommand.<span class="function">Setter <span class="title">generateCommandConfig</span><span class="params">(<span class="keyword">int</span> coreSize, <span class="keyword">int</span> maximumSize, <span class="keyword">int</span> maxQueueSize, <span class="keyword">int</span> rejThresholdSize)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> String commandName = <span class="string">&quot;TestThreadPoolCommand&quot;</span>;</span><br><span class="line">        <span class="keyword">final</span> HystrixCommand.Setter commandConfig = HystrixCommand.Setter</span><br><span class="line">            .withGroupKey(HystrixCommandGroupKey.Factory.asKey(commandName))</span><br><span class="line">            .andCommandKey(HystrixCommandKey.Factory.asKey(commandName))</span><br><span class="line">            .andCommandPropertiesDefaults(</span><br><span class="line">                HystrixCommandProperties.Setter()</span><br><span class="line">                    .withExecutionTimeoutEnabled(<span class="keyword">false</span>))</span><br><span class="line">            .andThreadPoolPropertiesDefaults(</span><br><span class="line">                HystrixThreadPoolProperties.Setter()</span><br><span class="line">                    .withCoreSize(coreSize)</span><br><span class="line">                    .withMaximumSize(maximumSize)</span><br><span class="line">                    .withAllowMaximumSizeToDivergeFromCoreSize(<span class="keyword">true</span>)</span><br><span class="line">                    .withMaxQueueSize(maxQueueSize)</span><br><span class="line">                    .withQueueSizeRejectionThreshold(rejThresholdSize));</span><br><span class="line">        <span class="keyword">return</span> commandConfig;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">runOnce</span><span class="params">(HystrixCommand.Setter commandConfig)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        HystrixCommand&lt;Void&gt; command = <span class="keyword">new</span> HystrixCommand&lt;Void&gt;(commandConfig) &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">protected</span> Void <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;;</span><br><span class="line">        command.execute();</span><br><span class="line">        Thread.sleep(<span class="number">100</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><p>测试数据：<code>coreSize</code>=5, <code>maxQueueSize</code>=-1，<code>maximumSize</code>=10，<code>queueSizeRejectionThreshold </code>=100</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200715145014418.png" alt="image-20200715145014418"></p>
+<p>结果显示：</p>
+<p>第11个任务并发的时候，hytrix拒绝执行任务，因此，<code>maxQueueSize</code>为-1，<code>maximumSize</code> - 生效，<code>queueSizeRejectionThreshold </code>- 不生效</p>
+</li>
+<li><p>测试数据 <code>coreSize</code>=5, <code>maxQueueSize</code>=5，<code>maximumSize</code>=10，<code>queueSizeRejectionThreshold </code>=5</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200715152012583.png" alt="image-20200715152012583"></p>
+<p>结果显示：在第11个任务并发的时候，hytrix会拒绝执行任务，因此<code>maxQueueSize</code> &gt;  0并且<code>maxQueueSize</code>=<code>queueSizeRejectionThreshold </code>时，</p>
+<p><code>maximumSize</code> - 不生效，<code>queueSizeRejectionThreshold </code> - 生效</p>
+</li>
+<li><p>测试数据 <code>coreSize</code>=5, <code>maxQueueSize</code>=5，<code>maximumSize</code>=10，<code>queueSizeRejectionThreshold </code>=3</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200715152153437.png" alt="image-20200715152153437"></p>
+<p>结果显示：在第9个任务并发的时候，hytrix会拒绝任务，因此，<code>maxQueueSize</code> &gt;  0并且<code>maxQueueSize</code>&gt;<code>queueSizeRejectionThreshold </code>时，</p>
+<p><code>maximumSize</code> - 不生效，<code>queueSizeRejectionThreshold </code> - 生效</p>
+</li>
+<li><p>测试数据 <code>coreSize</code>=5, <code>maxQueueSize</code>=5，<code>maximumSize</code>=10，<code>queueSizeRejectionThreshold </code>=20</p>
+<p><img src="http://qiniu.5ires.top/uPic/image-20200715170229628.png" alt="image-20200715170229628"></p>
+<p>结果显示：在第16个任务并发的时候，hytrix会拒绝任务，因此，<code>maxQueueSize</code> &gt;  0并且<code>maxQueueSize</code>&lt;<code>queueSizeRejectionThreshold </code>时，</p>
+<p><code>maximumSize</code> - 生效，<code>queueSizeRejectionThreshold </code> - 生效（像摆设，它永远比maximumSize大）</p>
+</li>
+</ol>
+</li>
+</ul>
+<h3 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h3><p>理解此hytrix的线程池配置的关键点，是在于搞清楚hytrix是否把任务交给线程池的逻辑部分，即<code>HystrixThreadPool</code>类中的<code>isQueueSpaceAvailable</code>方法，还有理清楚jdk的线程池的任务执行原理。基于提出的问题，做以下总结：</p>
+<p><code>maximumSize</code> 配置是否生效取决于 <code>maxQueueSize</code> 和 <code>queueSizeRejectionThreshold </code> 这两个配置</p>
+<ul>
+<li><p><code>maxQueueSize</code> = -1， hytrix使用同步队列，从而<code>queueSizeRejectionThreshold </code>也没用，<code>maximumSize</code>是生效的</p>
+</li>
+<li><p><code>maxQueueSize</code> &gt;=0 </p>
+<ul>
+<li><p><code>maxQueueSize</code> &lt; <code>queueSizeRejectionThreshold </code>, <code>maximumSize</code>生效</p>
+</li>
+<li><p><code>maxQueueSize</code>&gt;= <code>queueSizeRejectionThreshold </code>，<code>maximumSize</code>失效</p>
+</li>
+</ul>
+</li>
+</ul>
+<p><em>Ref.</em></p>
+<ol>
+<li><em><a target="_blank" rel="noopener" href="https://zhaox.github.io/java/2019/08/06/hystrix-thread-pool">危险的线程池</a></em></li>
+<li><em><a target="_blank" rel="noopener" href="https://github.com/Netflix/Hystrix/wiki/Configuration#coreSize">Hytrix-Configuration</a></em></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/Netflix/Hystrix/issues/1589">Issues</a></li>
+</ol>
+
+                                                                        
+                                    </div>
+                                    <footer class="article-footer">
+                                        <a data-url="https://blog.smallgolden.com/2020/07/14/Hytrix%E7%BA%BF%E7%A8%8B%E6%B1%A0%E8%AE%BE%E7%BD%AE%E5%9D%91/" data-id="ckfgqsgou00005wgx4pzx5por" class="article-share-link">
+                                            分享
+                                        </a>
+                                        
+                                    </footer>
+
+    </div>
+
+    
+        
+  <nav class="article-nav">
+    
+      <a href="/2020/07/21/Zuul%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="article-nav-link">
+        <strong class="article-nav-caption">前一篇</strong>
+        <div class="article-nav-title">
+          
+            Zuul 的源码分析
+          
+        </div>
+      </a>
+    
+    
+  </nav>
+
+
+            
+
+                
+                    
+    <div class="vcomments" id="vcomments"></div>
+    
+<script src="https://unpkg.com/valine/dist/Valine.min.js"></script>
+
+        <script>
+            new Valine({
+                el: '#vcomments',
+                appId: 'XCdSBRXNIWFWAyFXNmm7khWP-gzGzoHsz',
+                appKey: '1wCgvxYzG8GmQ1PIiRFJgtUx',
+                notify: 'false',
+                verify: 'true',
+                avatar: 'mp',
+                pageSize: '10',
+                placeholder: '请输入...'
+            })
+        </script>
+        
+                        
+                            
+
+</article>
+</section>
+  <footer class="footer">
+  <div class="outer">
+    <div class="float-right">
+      <ul class="list-inline">
+  
+    <li><i class="fe fe-smile-alt"></i> <span id="busuanzi_value_site_uv"></span></li>
+  
+    <li><i class="fe fe-bookmark"></i> <span id="busuanzi_value_page_pv"></span></li>
+  
+</ul>
+    </div>
+    <ul class="list-inline">
+      <li>&copy; 2020 鱼da王</li>
+      <li>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></li>
+      <li>Theme  <a target="_blank" rel="noopener" href="https://github.com/zhwangart/hexo-theme-ocean">Ocean</a></li>
+    </ul>
+  </div>
+</footer>
+
+</main>
+<aside class="sidebar">
+  <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+    <div class="logo">
+      <a href="/"><img src="/images/hexo.svg" alt="鱼da王"></a>
+    </div>
+  
+  <ul class="nav nav-main">
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/">Home</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/archives">Archives</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/gallery">Gallery</a>
+      </li>
+    
+      <li class="nav-item">
+        <a class="nav-item-link" href="/about">About</a>
+      </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link nav-item-search" title="搜索">
+        <i class="fe fe-search"></i>
+        搜索
+      </a>
+    </li>
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      <div class="totop" id="totop">
+  <i class="fe fe-rocket"></i>
+</div>
+    </li>
+    <li class="nav-item">
+      
+        <a class="nav-item-link" target="_blank" href="/atom.xml" title="RSS Feed">
+          <i class="fe fe-feed"></i>
+        </a>
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+</aside>
+
+<script src="/js/jquery-2.0.3.min.js"></script>
+
+
+<script src="/js/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/lazyload.min.js"></script>
+
+
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+  
+<script src="/js/tocbot.min.js"></script>
+
+  <script>
+    // Tocbot_v4.7.0  http://tscanlin.github.io/tocbot/
+    tocbot.init({
+      tocSelector: '.tocbot',
+      contentSelector: '.article-entry',
+      headingSelector: 'h1, h2, h3, h4, h5, h6',
+      hasInnerContainers: true,
+      scrollSmooth: true,
+      positionFixedSelector: '.tocbot',
+      positionFixedClass: 'is-position-fixed',
+      fixedSidebarOffset: 'auto',
+    });
+  </script>
+
+
+
+<script src="/js/ocean.js"></script>
+
+
+</body>
+</html>
